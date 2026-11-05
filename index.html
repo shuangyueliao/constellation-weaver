@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#04050e">
+<meta name="description" content="Constellation Weaver — rotate the night sky, gather linked stars and weave 25 original constellations. Free single-file HTML5 puzzle.">
+<title>Constellation Weaver · Star Sky Puzzle</title>
+<script>
+// 平台 SDK 按域名条件加载（独立运行时完全不加载，游戏行为不变）
+(function () {
+  var host = location.hostname || "";
+  try {
+    if (host.indexOf("crazygames") !== -1) {
+      var s1 = document.createElement("script");
+      s1.src = "https://sdk.crazygames.com/crazygames-sdk-v3.js";
+      s1.onload = function () {
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+          window.CrazyGames.SDK.init().then(function () {
+            try { window.CrazyGames.SDK.game.loadingStart(); } catch (e) {}
+            window.addEventListener("load", function () { try { window.CrazyGames.SDK.game.loadingStop(); } catch (e) {} });
+          }).catch(function () {});
+        }
+      };
+      document.head.appendChild(s1);
+      window.__portal = "crazygames";
+    } else if (host.indexOf("gamedistribution") !== -1 || host.indexOf("html5.gamedistribution.com") !== -1 || host.indexOf("gd.games") !== -1) {
+      var s2 = document.createElement("script");
+      s2.src = "https://sdk.gamedistribution.com/v2/main.min.js";
+      document.head.appendChild(s2);
+      window.__portal = "gamedistribution";
+    }
+  } catch (e) {}
+})();
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; background:#04050e; overscroll-behavior:none; user-select:none; -webkit-user-select:none; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
+  #wrap { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #hud { display:flex; justify-content:space-between; align-items:center; width:100%; max-width:480px; padding:8px 14px 4px; color:#e8ecf8; }
+  .stat { text-align:center; min-width:60px; }
+  .stat .label { font-size:10px; color:#7e86ad; letter-spacing:1.5px; }
+  .stat .val { font-size:18px; font-weight:800; margin-top:1px; }
+  #stage { position:relative; }
+  canvas { display:block; border-radius:14px; touch-action:none; background:#04050e; }
+  #bar { display:none; gap:8px; padding:8px 0 2px; align-items:center; }
+  .pbtn { background:#161a30; color:#cdd6f4; border:1px solid #2c3358; border-radius:12px; padding:10px 14px; font-size:13px; font-weight:700; letter-spacing:1px; cursor:pointer; font-family:inherit; }
+  .pbtn:active { transform:scale(.96); }
+  #tiltBtn { min-width:74px; }
+  #weaveBtn { background:linear-gradient(135deg,#3d2f0a,#6b5416); border-color:#a9862c; color:#ffd76a; padding:10px 26px; font-size:16px; font-weight:900; letter-spacing:2px; }
+  #weaveBtn.pulse { animation:wp .9s infinite; }
+  @keyframes wp { 0%,100% { box-shadow:0 0 0 rgba(255,215,106,0); } 50% { box-shadow:0 0 20px rgba(255,215,106,.75); } }
+  #footer { color:#4c5375; font-size:10px; padding:4px 0 8px; letter-spacing:1px; }
+  #overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(4,6,16,.80); z-index:5; border-radius:14px; }
+  #panel { background:#10142a; border:1px solid #2c3358; border-radius:18px; padding:20px 22px; text-align:center; color:#fff; width:min(92%,400px); max-height:94%; overflow-y:auto; }
+  .mtitle { font-size:26px; font-weight:900; letter-spacing:4px; color:#ffd76a; line-height:1.25; }
+  .tag { color:#93a0c9; font-size:12px; margin:8px 0 12px; line-height:1.5; }
+  .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin:4px 0 12px; }
+  .cell { background:#181d3a; border:1px solid #303a66; border-radius:10px; color:#e8ecf8; padding:7px 0 5px; cursor:pointer; font-family:inherit; }
+  .cell .num { font-size:15px; font-weight:800; display:block; }
+  .cell .st { font-size:9px; color:#ffd76a; display:block; margin-top:2px; }
+  .cell.locked { opacity:.35; cursor:default; }
+  .cell.done { border-color:#a9862c; }
+  .help { color:#7e86ad; font-size:11px; line-height:1.55; margin-bottom:10px; text-align:left; }
+  .linkbtn { background:none; border:none; color:#5d6590; font-size:11px; text-decoration:underline; cursor:pointer; font-family:inherit; }
+  .wtitle { font-size:20px; letter-spacing:2px; color:#ffd76a; }
+  .lname { color:#aeb9dd; font-size:13px; margin:6px 0 2px; }
+  .bigstars { font-size:32px; color:#ffd76a; margin:8px 0; letter-spacing:6px; }
+  .stats { color:#93a0c9; font-size:13px; margin-bottom:14px; }
+  .row { display:flex; gap:8px; justify-content:center; }
+  .row .pbtn { flex:1; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="stat"><div class="label">LEVEL</div><div class="val" id="hLvl">-</div></div>
+    <div class="stat"><div class="label">TIME</div><div class="val" id="hTime">0:00</div></div>
+    <div class="stat"><div class="label">MOVES</div><div class="val" id="hMoves">0</div></div>
+  </div>
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="overlay"><div id="panel"></div></div>
+  </div>
+  <div id="bar">
+    <button id="tiltBtn" class="pbtn">TILT I</button>
+    <button id="weaveBtn" class="pbtn">WEAVE</button>
+    <button id="sndBtn" class="pbtn">&#9834; ON</button>
+    <button id="menuBtn" class="pbtn">MENU</button>
+  </div>
+  <div id="footer">CONSTELLATION WEAVER — A FREE ORIGINAL STAR PUZZLE</div>
+</div>
+<script>
+"use strict";
+// >>> PURE BEGIN
+// ============ 天球数学与规则判定（纯函数区：浏览器与 node 单测共用同一份实现） ============
+// 坐标约定：单位天球，屏幕 x 向右、y(深度) 指向观察者、z 向上。
+// 星星固定于经度 lon / 纬度 lat；玩家旋转 = 绕极轴(z)转 rotDeg，纬度倾斜只有两档 TILTS。
+var TILTS = [0, 50];                       // 两档纬度倾斜（度）
+var THRESH = { adj: 0.36, poll: 0.26 };    // 归一化阈值（以天球半径 R 为 1）：相邻距离 / 干扰污染半径
+
+function starVec(lon, lat) {               // 经纬度 → 单位球向量
+  var lr = lon * Math.PI / 180, br = lat * Math.PI / 180, cb = Math.cos(br);
+  return { x: cb * Math.sin(lr), y: cb * Math.cos(lr), z: Math.sin(br) };
+}
+// 投影：先绕极轴转 rotDeg（λ' = λ + rot），再绕屏幕横轴倾斜 TILTS[tiltIdx]。
+// 返回 {u,v,d}：u 右 / v 上（归一化，乘 R 得像素），d 朝向观察者（>0 前半球，<0 背半球）。
+function projNorm(p, rotDeg, tiltIdx) {
+  var th = rotDeg * Math.PI / 180, ct = Math.cos(th), st = Math.sin(th);
+  var x1 = p.x * ct + p.y * st;
+  var y1 = p.y * ct - p.x * st;
+  var ps = TILTS[tiltIdx] * Math.PI / 180, cp = Math.cos(ps), sp = Math.sin(ps);
+  return { u: x1, v: p.z * cp - y1 * sp, d: y1 * cp + p.z * sp };
+}
+function orient(ax, ay, bx, by, cx, cy) { return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax); }
+function onSeg(ax, ay, bx, by, px, py) {
+  return Math.min(ax, bx) - 1e-9 <= px && px <= Math.max(ax, bx) + 1e-9 &&
+         Math.min(ay, by) - 1e-9 <= py && py <= Math.max(ay, by) + 1e-9;
+}
+function segIntersect(a, b, c, d) {        // 线段严格相交（含共线重叠，端点接触也算）
+  var o1 = orient(a.u, a.v, b.u, b.v, c.u, c.v), o2 = orient(a.u, a.v, b.u, b.v, d.u, d.v);
+  var o3 = orient(c.u, c.v, d.u, d.v, a.u, a.v), o4 = orient(c.u, c.v, d.u, d.v, b.u, b.v);
+  if (((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))) return true;
+  if (o1 === 0 && onSeg(a.u, a.v, b.u, b.v, c.u, c.v)) return true;
+  if (o2 === 0 && onSeg(a.u, a.v, b.u, b.v, d.u, d.v)) return true;
+  if (o3 === 0 && onSeg(c.u, c.v, d.u, d.v, a.u, a.v)) return true;
+  if (o4 === 0 && onSeg(c.u, c.v, d.u, d.v, b.u, b.v)) return true;
+  return false;
+}
+function segCrossPoint(a, b, c, d) {       // 交点（仅用于画 × 标记）
+  var d1x = b.u - a.u, d1y = b.v - a.v, d2x = d.u - c.u, d2y = d.v - c.v;
+  var den = d1x * d2y - d1y * d2x;
+  if (den === 0) return { u: (a.u + b.u) / 2, v: (a.v + b.v) / 2 };
+  var t = ((c.u - a.u) * d2y - (c.v - a.v) * d2x) / den;
+  return { u: a.u + d1x * t, v: a.v + d1y * t };
+}
+function distToSeg(p, a, b) {              // 点到线段距离（端点钳位）
+  var abx = b.u - a.u, aby = b.v - a.v, apx = p.u - a.u, apy = p.v - a.v;
+  var L2 = abx * abx + aby * aby;
+  var t = L2 > 0 ? (apx * abx + apy * aby) / L2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  var dx = p.u - (a.u + abx * t), dy = p.v - (a.v + aby * t);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+// 规则判定（WEAVE 即按此验证）：
+// 1) 全部目标星对屏幕距离 ≤ adj（相邻即点亮）；2) 月光星 u ≤ 0（月侧半场）；
+// 3) 干扰星到目标线段距离 ≤ poll → 该线被污染；4) 目标线不得与任何线交叉（共享端点除外）。
+function checkLevel(L, rotDeg, tiltIdx, T) {
+  T = T || THRESH;
+  var n = L.stars.length, i, j, k;
+  var pos = new Array(n);
+  for (i = 0; i < n; i++) pos[i] = projNorm(starVec(L.stars[i][0], L.stars[i][1]), rotDeg, tiltIdx);
+  var pairs = L.pairs, np = pairs.length;
+  var adj2 = T.adj * T.adj;
+  var lit = new Array(np), polluted = new Array(np);
+  var strands = [];                         // 非目标但恰好相邻的“附带线”
+  for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+    var dx = pos[i].u - pos[j].u, dy = pos[i].v - pos[j].v;
+    if (dx * dx + dy * dy > adj2) continue;
+    var tgt = false;
+    for (k = 0; k < np; k++) { var P = pairs[k]; if ((P[0] === i && P[1] === j) || (P[0] === j && P[1] === i)) { tgt = true; break; } }
+    if (!tgt) strands.push([i, j]);
+  }
+  for (k = 0; k < np; k++) {
+    var a = pos[pairs[k][0]], b = pos[pairs[k][1]];
+    var ddx = a.u - b.u, ddy = a.v - b.v;
+    lit[k] = ddx * ddx + ddy * ddy <= adj2;
+    polluted[k] = false;
+    for (i = 0; i < n; i++) {
+      if (L.stars[i][2] !== 1) continue;    // 仅干扰星（标记 1）会污染
+      if (distToSeg(pos[i], a, b) <= T.poll) { polluted[k] = true; break; }
+    }
+  }
+  var segs = [], cross = false, crossAt = null;
+  for (k = 0; k < np; k++) segs.push([pairs[k][0], pairs[k][1], true]);
+  for (k = 0; k < strands.length; k++) segs.push([strands[k][0], strands[k][1], false]);
+  for (i = 0; i < segs.length && !cross; i++) {
+    if (!segs[i][2]) continue;              // 只要有目标线参与的交叉才算违规
+    for (j = i + 1; j < segs.length; j++) {
+      if (segs[i][0] === segs[j][0] || segs[i][0] === segs[j][1] || segs[i][1] === segs[j][0] || segs[i][1] === segs[j][1]) continue;
+      if (segIntersect(pos[segs[i][0]], pos[segs[i][1]], pos[segs[j][0]], pos[segs[j][1]])) {
+        cross = true;
+        crossAt = segCrossPoint(pos[segs[i][0]], pos[segs[i][1]], pos[segs[j][0]], pos[segs[j][1]]);
+        break;
+      }
+    }
+  }
+  var moonBad = [], moon = L.moon || [];
+  for (i = 0; i < moon.length; i++) if (pos[moon[i]].u > 0) moonBad.push(moon[i]);
+  var win = true;
+  for (k = 0; k < np; k++) if (!lit[k] || polluted[k]) { win = false; break; }
+  if (cross || moonBad.length) win = false;
+  return { win: win, lit: lit, polluted: polluted, cross: cross, crossAt: crossAt, moonBad: moonBad, pos: pos, strands: strands };
+}
+var LEVELS = /*__LEVELS__*/[{"name":"The Two Lamps","stars":[[177.31,36.04,0],[-5.2,45.07,0],[-37.53,4,0],[-151.96,-1.27,0],[42.8,-27.35,0],[-8.25,-40.22,0],[143.97,16.58,0],[146.52,-4.31,0]],"pairs":[[0,1],[2,3]],"moon":[],"ref":[0,0],"start":207.9,"drift":0,"par":[5,54]},{"name":"The Silver Kite","stars":[[-177.85,14.7,0],[-3.67,7.71,0],[-147.08,-24.33,0],[-35.39,-31.68,0],[178.77,-45.84,0],[2.22,-37.51,0],[-134.1,25.01,0],[133.31,19.28,0]],"pairs":[[0,1],[2,3],[4,5]],"moon":[],"ref":[0,0],"start":195.1,"drift":0,"par":[6,66]},{"name":"The Heron in Flight","stars":[[174.45,-41.01,0],[9.66,53.02,0],[-30.53,26.62,0],[-123.58,-47.16,0],[120.69,-61.84,0],[31.78,24.92,0],[124.78,75.04,0],[74.64,50.56,0],[-144.92,-29.5,0]],"pairs":[[0,1],[2,3],[4,5]],"moon":[],"ref":[0,1],"start":165.5,"drift":0,"par":[6,66]},{"name":"The Moonlit Oar","stars":[[-161.49,23.29,0],[-28.07,28.33,0],[174.6,-9.98,0],[-2.48,-9.74,0],[-36.71,-21.27,0],[-145.69,-13.92,0],[50.28,0.06,0],[21.18,21.84,0],[177.85,-33.66,0]],"pairs":[[0,1],[2,3],[4,5]],"moon":[1],"ref":[0,0],"start":165.2,"drift":0,"par":[7,74]},{"name":"The Wanderer's Sash","stars":[[-13.22,51.36,0],[-165.89,-41.86,0],[24.68,20.37,0],[96.48,-58.89,0],[-36.91,16.02,0],[-113.16,-48,0],[162.36,-1.77,0],[-156.67,-8.92,0],[66.14,35.44,0],[157.23,-48.74,1]],"pairs":[[0,1],[2,3],[4,5]],"moon":[5],"ref":[0,1],"start":184.8,"drift":0,"par":[9,89]},{"name":"The Crystal Comb","stars":[[-11.77,-10.12,0],[-173.78,-5.89,0],[-25.2,25,0],[-162.25,20.95,0],[-140.57,-2.68,0],[-42.73,-9.33,0],[139.36,-3.36,0],[35.73,-8.23,0],[24,25.41,0],[178.24,-54.55,1]],"pairs":[[0,1],[2,3],[4,5],[6,7]],"moon":[5],"ref":[0,0],"start":157,"drift":0,"par":[10,101]},{"name":"The Foxfire Ring","stars":[[-26.78,29.37,0],[-146.3,-58.79,0],[148.22,-40.97,0],[34.24,40.63,0],[-22.3,60.21,0],[-176.24,-43.29,0],[-139.95,-28.62,0],[-49.97,40.58,0],[68.9,-73.69,0],[-156.73,72.13,1]],"pairs":[[0,1],[2,3],[4,5],[6,7]],"moon":[0],"ref":[0,1],"start":180.5,"drift":0,"par":[10,101]},{"name":"The Twin Harbors","stars":[[-161.97,-19.75,0],[-11.71,-22.59,0],[177.89,21.73,0],[-0.44,13.67,0],[-35.2,2.49,0],[-145.29,8.89,0],[28.01,-5.35,0],[142.75,-2,0],[151.4,42.52,0],[-160.84,33.83,0],[164.19,-37.56,1]],"pairs":[[0,1],[2,3],[4,5],[6,7]],"moon":[0,4],"ref":[0,0],"start":162.7,"drift":0,"par":[11,109]},{"name":"The Ember Chalice","stars":[[173.81,-47.04,0],[15.78,57.66,0],[-60.78,51.08,0],[-150.93,-33.18,0],[-120.69,-58.57,0],[-26.06,16.26,0],[31.68,12.91,0],[106.17,-55.13,0],[177.56,0.75,0],[129.25,-24.7,1],[0.03,7.8,1]],"pairs":[[0,1],[2,3],[4,5],[6,7]],"moon":[2],"ref":[0,1],"start":184.8,"drift":0,"par":[12,116]},{"name":"The Cartographer","stars":[[-163.37,2.82,0],[-8.74,2.64,0],[165.82,23.02,0],[10.94,31.85,0],[-151.89,-26.13,0],[-23.64,-20.9,0],[32,-25.72,0],[156.88,-30.76,0],[-140.12,8.66,0],[-43.62,14.45,0],[-156.46,36.75,0],[49.6,19.39,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[4,9],"ref":[0,0],"start":199.4,"drift":0,"par":[12,121]},{"name":"The Salt Meridian","stars":[[156.43,-53.64,0],[29.25,39.04,0],[-16.91,58.86,0],[-161.93,-45.13,0],[-51.88,28.76,0],[-110.67,-41.77,0],[-61.17,47.5,0],[-139.78,-18.87,0],[-117.9,-61.83,0],[-19.54,19.26,0],[98.25,54.72,1],[131.42,-24.89,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[7,8],"ref":[0,1],"start":187.5,"drift":0,"par":[14,136]},{"name":"The Lantern Moth","stars":[[1.73,-10.41,0],[-174.3,-6.23,0],[13.26,34.17,0],[164.97,28.03,0],[-33.66,-13.32,0],[-137.44,-20.17,0],[-159.91,26.7,0],[-12.33,21.64,0],[-3.02,-42.19,0],[-165.37,-45.93,0],[140.54,12.52,0],[42.64,-21.26,1],[-20.24,54.89,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[5,6],"ref":[0,0],"start":209.6,"drift":0,"par":[14,136]},{"name":"The Quiet Anchor","stars":[[169.63,-47.75,0],[26.51,54.19,0],[-35.84,15.75,0],[-117.04,-58.95,0],[-145.91,-20.18,0],[-55.33,50.9,0],[-23.82,42.44,0],[-161.57,-53.16,0],[29.45,22.44,0],[117.7,-53.67,0],[161.67,-4.2,0],[-166.2,-8.32,1],[-11.43,7.5,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[6],"ref":[0,1],"start":160.2,"drift":0,"par":[13,128]},{"name":"The Glass Spiral","stars":[[-14.69,1.88,0],[-159.61,-2.88,0],[175.41,-19.33,0],[-0.64,-23.6,0],[161.33,22.37,0],[8.28,22.5,0],[-162.41,33.37,0],[-15.11,41.06,0],[-136.53,-10.15,0],[-44.47,-15.5,0],[-174.32,-55.47,1],[37.59,4.92,1],[144.58,-37.21,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[1,8],"ref":[0,0],"start":173.6,"drift":0,"par":[16,151]},{"name":"The Winter Orchard","stars":[[-42.24,58.8,0],[-164.52,-29.76,0],[19.48,17.1,0],[122.12,-61.63,0],[147.63,-31.91,0],[54.9,58.54,0],[-128.73,-55.02,0],[-20.72,30.34,0],[-54.9,37.81,0],[-130.94,-24.83,0],[-179.21,-56.15,0],[10.22,40.3,0],[176.03,1.98,1],[-9.33,6.75,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[0,9],"ref":[0,1],"start":183.2,"drift":0,"par":[15,148]},{"name":"The Tideclock","stars":[[-158.39,-16.12,0],[-29.96,-19.98,0],[-146.06,15.5,0],[-36.57,9.46,0],[4.79,12.16,0],[-177.5,5.92,0],[158.17,-38.35,0],[14.42,-36.51,0],[-159.49,-37.23,0],[-17.87,-44.06,0],[142.25,7.3,0],[36.53,13.2,0],[-36.71,43.75,1],[-5.44,36.91,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[3,8],"ref":[0,0],"start":202.2,"drift":0,"par":[15,148]},{"name":"The Stargazer's Loom","stars":[[-42.24,58.8,0],[-164.52,-29.76,0],[19.48,17.1,0],[122.12,-61.63,0],[147.63,-31.91,0],[54.9,58.54,0],[-128.73,-55.02,0],[-20.72,30.34,0],[-54.9,37.81,0],[-130.94,-24.83,0],[-179.21,-56.15,0],[10.22,40.3,0],[176.03,1.98,1],[-9.33,6.75,1],[-123.74,67.9,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[0,9],"ref":[0,1],"start":172,"drift":0,"par":[17,163]},{"name":"The Copper Serpent","stars":[[175.5,-7.84,0],[12.1,-7.88,0],[-16.25,23.85,0],[-160.23,29.74,0],[160.4,30.99,0],[15.89,39.59,0],[-16.95,-3.05,0],[-169.63,3.18,0],[-134.25,12,0],[-40.71,6.48,0],[-137.14,-18.78,0],[-33.97,-23.74,0],[163.58,-49.1,1],[51.18,-20.22,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[6,8,10],"ref":[0,0],"start":194,"drift":0,"par":[16,156]},{"name":"The Veiled Crown","stars":[[-42.24,58.8,0],[-164.52,-29.76,0],[19.48,17.1,0],[122.12,-61.63,0],[147.63,-31.91,0],[54.9,58.54,0],[-128.73,-55.02,0],[-20.72,30.34,0],[-54.9,37.81,0],[-130.94,-24.83,0],[-179.21,-56.15,0],[10.22,40.3,0],[176.03,1.98,1],[-9.33,6.75,1],[-123.74,67.9,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[0,9],"ref":[0,1],"start":172,"drift":0,"par":[17,163]},{"name":"The Aurora Forge","stars":[[-163.36,2.92,0],[-10.38,6.78,0],[-27.88,-35.81,0],[-153.23,-27.15,0],[-154.14,25.25,0],[-24.6,33.04,0],[-40.3,0.46,0],[-133.1,-3.65,0],[22.85,29.53,0],[153.73,20.86,0],[164.86,-18.5,0],[20.83,-27.41,0],[48.63,5.63,1],[1.2,47.45,1],[0.73,-47.8,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[4,7],"ref":[0,0],"start":170.2,"drift":0,"par":[17,163]},{"name":"The Drifting Garden","stars":[[-42.24,58.8,0],[-164.52,-29.76,0],[19.48,17.1,0],[122.12,-61.63,0],[147.63,-31.91,0],[54.9,58.54,0],[-128.73,-55.02,0],[-20.72,30.34,0],[-54.9,37.81,0],[-130.94,-24.83,0],[-179.21,-56.15,0],[10.22,40.3,0],[176.03,1.98,1],[-9.33,6.75,1],[-123.74,67.9,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[0,6,9],"ref":[0,1],"start":172,"drift":1.6,"par":[20,216]},{"name":"The Phantom Compass","stars":[[37.88,15.45,0],[142.89,7.11,0],[-0.93,-4.23,0],[-176.01,-11.38,0],[-35.31,17.12,0],[-153.18,9.76,0],[-176.01,31.44,0],[-4.35,24.96,0],[-152.03,-18.49,0],[-30.16,-9.88,0],[-173,-50.44,1],[51.5,-22.69,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[4,9],"ref":[0,0],"start":158.9,"drift":2,"par":[16,181]},{"name":"The Midnight Carousel","stars":[[-27.61,52.34,0],[-153.32,-36.11,0],[-118.17,-59.95,0],[-22.21,16.44,0],[151.29,-34.73,0],[37.08,48.39,0],[-128.52,-39.83,0],[-54.07,28.05,0],[106.38,-55.6,0],[29.51,14.94,0],[115.78,74.35,0],[-18.5,72.5,1],[0.7,-6.66,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9]],"moon":[2,7],"ref":[0,1],"start":206,"drift":2.2,"par":[16,181]},{"name":"The Eclipse Harp","stars":[[-15.2,22.93,0],[-160.74,30.72,0],[158.65,-6.58,0],[21.18,-1.06,0],[29.04,33.33,0],[156.9,25.79,0],[-153.09,-0.67,0],[-21.05,-3.71,0],[-5.17,-38.06,0],[-173.13,-31.04,0],[-34.81,-30.04,0],[-142.82,-23.05,0],[55.7,-10.59,1],[26.38,-31.12,1],[9.82,57.32,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[6,11],"ref":[0,0],"start":199.5,"drift":2.6,"par":[19,208]},{"name":"The Weaver's Masterpiece","stars":[[-42.24,58.8,0],[-164.52,-29.76,0],[19.48,17.1,0],[122.12,-61.63,0],[147.63,-31.91,0],[54.9,58.54,0],[-128.73,-55.02,0],[-20.72,30.34,0],[-54.9,37.81,0],[-130.94,-24.83,0],[-179.21,-56.15,0],[10.22,40.3,0],[176.03,1.98,1],[-9.33,6.75,1],[-123.74,67.9,1]],"pairs":[[0,1],[2,3],[4,5],[6,7],[8,9],[10,11]],"moon":[0,6,9],"ref":[0,1],"start":172,"drift":3,"par":[20,216]}];
+var __CW = { TILTS: TILTS, THRESH: THRESH, starVec: starVec, projNorm: projNorm, distToSeg: distToSeg, segIntersect: segIntersect, checkLevel: checkLevel, LEVELS: LEVELS };
+// <<< PURE END >>>
+
+// ============ 游戏主体 ============
+var W = 480, H = 720, CX = 240, CY = 368, R = 206;
+var SENS = 0.55;                            // 灵敏度：度 / 逻辑像素
+var canvas = document.getElementById("game");
+var ctx = canvas.getContext("2d");
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = W * dpr; canvas.height = H * dpr;
+
+var hud = document.getElementById("hud");
+var bar = document.getElementById("bar");
+var footer = document.getElementById("footer");
+var overlay = document.getElementById("overlay");
+var panel = document.getElementById("panel");
+var hLvl = document.getElementById("hLvl"), hTime = document.getElementById("hTime"), hMoves = document.getElementById("hMoves");
+var tiltBtn = document.getElementById("tiltBtn"), weaveBtn = document.getElementById("weaveBtn");
+var sndBtn = document.getElementById("sndBtn"), menuBtn = document.getElementById("menuBtn");
+
+// ---------- 进度存取（全部 try/catch） ----------
+var prog = { u: 1, s: {}, sound: 1 };
+function loadProg() {
+  try {
+    var j = JSON.parse(localStorage.getItem("cw_progress") || "{}");
+    if (j && j.u) { prog.u = Math.max(1, Math.min(LEVELS.length, j.u | 0)); prog.s = j.s || {}; prog.sound = j.sound === 0 ? 0 : 1; }
+  } catch (e) {}
+}
+function saveProg() { try { localStorage.setItem("cw_progress", JSON.stringify(prog)); } catch (e) {} }
+
+// ---------- 音效（WebAudio 全合成） ----------
+var AC = null, master = null, whooshG = null, whooshF = null;
+function audioInit() {
+  if (AC) { try { if (AC.state === "suspended") AC.resume(); } catch (e) {} return; }
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    AC = new Ctx();
+    master = AC.createGain(); master.gain.value = prog.sound ? 1 : 0; master.connect(AC.destination);
+    // 星空环境垫音
+    var padG = AC.createGain(); padG.gain.value = 0.05;
+    var lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 320; lp.Q.value = 0.4;
+    var o1 = AC.createOscillator(); o1.type = "sine"; o1.frequency.value = 110;
+    var o2 = AC.createOscillator(); o2.type = "triangle"; o2.frequency.value = 165; o2.detune.value = 4;
+    var o3 = AC.createOscillator(); o3.type = "sine"; o3.frequency.value = 220.5;
+    var g3 = AC.createGain(); g3.gain.value = 0.3;
+    o1.connect(lp); o2.connect(lp); o3.connect(g3); g3.connect(lp);
+    lp.connect(padG); padG.connect(master);
+    var lfo = AC.createOscillator(); lfo.frequency.value = 0.06;
+    var lg = AC.createGain(); lg.gain.value = 0.02;
+    lfo.connect(lg); lg.connect(padG.gain);
+    o1.start(); o2.start(); o3.start(); lfo.start();
+    // 噪声源（旋转呼呼声）
+    var nb = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+    var dd = nb.getChannelData(0);
+    for (var i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
+    var ns = AC.createBufferSource(); ns.buffer = nb; ns.loop = true;
+    var bp = AC.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 500; bp.Q.value = 1.1;
+    whooshG = AC.createGain(); whooshG.gain.value = 0; whooshF = bp;
+    ns.connect(bp); bp.connect(whooshG); whooshG.connect(master); ns.start();
+  } catch (e) { AC = null; }
+}
+function tone(f, dur, type, g, when, slide) {
+  if (!AC) return;
+  try {
+    var t0 = AC.currentTime + (when || 0);
+    var o = AC.createOscillator(), gn = AC.createGain();
+    o.type = type || "sine"; o.frequency.setValueAtTime(f, t0);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t0 + dur);
+    gn.gain.setValueAtTime(0.0001, t0);
+    gn.gain.exponentialRampToValueAtTime(g || 0.1, t0 + 0.015);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(gn); gn.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  } catch (e) {}
+}
+function harp(n) {                          // 连线竖琴音阶：每连一条升一度（五声音阶）
+  var steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+  var f = 392 * Math.pow(2, steps[Math.min(n, steps.length - 1)] / 12);
+  tone(f, 0.7, "triangle", 0.09); tone(f * 2, 0.35, "sine", 0.03);
+}
+function choir() {                          // WEAVE 成功合唱
+  var fs = [220, 277.18, 329.63, 440, 554.37];
+  for (var i = 0; i < fs.length; i++) { tone(fs[i], 2.4, "sine", 0.05, i * 0.06); tone(fs[i] * 2.003, 1.6, "sine", 0.015, i * 0.06 + 0.1); }
+}
+function bassHit() { tone(92, 0.5, "sawtooth", 0.12, 0, 55); }   // 约束破坏低音
+function readyChime() { tone(880, 0.3, "sine", 0.06); tone(1318.5, 0.5, "sine", 0.05, 0.09); }
+function uiBlip() { tone(640, 0.05, "square", 0.035); }
+
+// ---------- 平台埋点（域名守卫已在 loader 中设置 __portal） ----------
+function cgPlayStart() {
+  try { if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStart(); } catch (e) {}
+}
+function cgPlayStop(happy) {
+  try {
+    if (window.__portal === "crazygames" && window.CrazyGames && window.CrazyGames.SDK) {
+      window.CrazyGames.SDK.game.gameplayStop();
+      if (happy) window.CrazyGames.SDK.game.happytime();
+    }
+  } catch (e) {}
+}
+
+// ---------- 程序化背景（星云噪点，一次性预渲染） ----------
+var bgC = null, DUST = [];
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function buildBG() {
+  bgC = document.createElement("canvas");
+  bgC.width = W * dpr; bgC.height = H * dpr;
+  var b = bgC.getContext("2d"); b.scale(dpr, dpr);
+  var rnd = mulberry32(20260206);
+  var g0 = b.createLinearGradient(0, 0, 0, H);
+  g0.addColorStop(0, "#04050e"); g0.addColorStop(0.5, "#0a0c20"); g0.addColorStop(1, "#05060f");
+  b.fillStyle = g0; b.fillRect(0, 0, W, H);
+  var hues = [[96, 70, 200], [60, 110, 190], [150, 60, 170], [40, 90, 160], [120, 80, 220]];
+  for (var i = 0; i < 7; i++) {
+    var x = rnd() * W, y = rnd() * H, r = 90 + rnd() * 180, c = hues[i % 5];
+    var gr = b.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (0.05 + rnd() * 0.07).toFixed(3) + ")");
+    gr.addColorStop(1, "rgba(0,0,0,0)");
+    b.fillStyle = gr; b.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  for (var j = 0; j < 240; j++) {
+    var a = 0.04 + rnd() * rnd() * 0.30;
+    b.fillStyle = "rgba(220,230,255," + a.toFixed(3) + ")";
+    var s = rnd() < 0.85 ? 1 : 2;
+    b.fillRect(rnd() * W, rnd() * H, s, s);
+  }
+  DUST = [];
+  for (var k = 0; k < 36; k++) DUST.push({ x: rnd() * W, y: rnd() * H, ph: rnd() * 6.28, sp: 0.4 + rnd() * 1.2 });
+}
+
+// ---------- 自适应 ----------
+function fit() {
+  var availW = Math.min(window.innerWidth, 560);
+  var availH = window.innerHeight - hud.offsetHeight - bar.offsetHeight - footer.offsetHeight - 10;
+  var s = Math.min(availW / W, availH / H);
+  if (!isFinite(s) || s <= 0) s = 1;
+  s = Math.max(0.4, Math.min(1.15, s));
+  var cw = Math.floor(W * s), ch = Math.floor(H * s);
+  canvas.style.width = cw + "px"; canvas.style.height = ch + "px";
+  hud.style.width = cw + "px"; bar.style.width = cw + "px";
+}
+window.addEventListener("resize", fit);
+
+// ---------- 状态 ----------
+var G = {
+  scene: "MENU", lvl: 0, rot: 0, tilt: 0, moves: 0, elapsed: 0,
+  res: null, prevLitN: 0, prevLit: [], prevPol: false, lastPolSnd: 0,
+  ready: false, shake: 0, toast: null, parts: [], trail: [], lastPx: [], letter: [], litStar: [],
+  lastSec: -1
+};
+function fmtT(s) { var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ":" + (r < 10 ? "0" : "") + r; }
+function updHUD() {
+  var L = LEVELS[G.lvl];
+  hLvl.textContent = (G.lvl + 1) + "/" + LEVELS.length;
+  var sec = Math.floor(G.elapsed);
+  if (sec !== G.lastSec) { G.lastSec = sec; hTime.textContent = fmtT(G.elapsed); }
+  hMoves.textContent = G.moves + "/" + L.par[0];
+  hMoves.style.color = G.moves > L.par[0] ? "#ff8a8a" : "";
+}
+function updMoves() { updHUD(); }
+
+// ---------- 界面面板 ----------
+function showMenu() {
+  G.scene = "MENU"; bar.style.display = "none"; fit();
+  var h = '<div class="mtitle">CONSTELLATION<br>WEAVER</div>' +
+    '<p class="tag">Rotate the night sky. Gather the linked stars.<br>Weave all 25 constellations.</p><div class="grid">';
+  for (var i = 0; i < LEVELS.length; i++) {
+    var un = i < prog.u, s = prog.s[i] || 0;
+    h += un
+      ? '<button class="cell' + (s ? " done" : "") + '" data-i="' + i + '"><span class="num">' + (i + 1) + '</span><span class="st">' + ("★★★".slice(0, s) + "☆☆☆".slice(0, 3 - s)) + '</span></button>'
+      : '<button class="cell locked"><span class="num">·</span><span class="st">—</span></button>';
+  }
+  h += '</div><div class="help">DRAG to rotate the sky · TILT flips the axis.<br>' +
+    'Bring every dashed pair of stars together. Keep crest-marked stars in the moonlight (left half), keep dark stars off your strands, and never let strands cross. Then press WEAVE.</div>' +
+    '<button class="linkbtn" id="resetBtn">Reset progress</button>';
+  panel.innerHTML = h;
+  overlay.style.display = "flex";
+}
+function showWin(stars) {
+  G.scene = "WIN"; bar.style.display = "none"; fit();
+  weaveBtn.classList.remove("pulse");
+  var L = LEVELS[G.lvl], last = G.lvl === LEVELS.length - 1;
+  var h = '<h2 class="wtitle">' + (last ? "THE SKY IS WOVEN" : "CONSTELLATION WOVEN") + '</h2>' +
+    '<p class="lname">' + L.name + (last ? " — all 25 complete" : "") + '</p>' +
+    '<div class="bigstars">' + "★★★".slice(0, stars) + "☆☆☆".slice(0, 3 - stars) + '</div>' +
+    '<p class="stats">Moves ' + G.moves + '/' + L.par[0] + ' · Time ' + fmtT(G.elapsed) + '</p>' +
+    '<div class="row">' + (last ? "" : '<button class="pbtn" data-a="next">NEXT</button>') +
+    '<button class="pbtn" data-a="replay">REPLAY</button><button class="pbtn" data-a="menu">LEVELS</button></div>';
+  panel.innerHTML = h;
+  overlay.style.display = "flex";
+}
+function hideOverlay() { overlay.style.display = "none"; }
+panel.addEventListener("click", function (e) {
+  var c = e.target.closest ? e.target.closest("[data-i]") : null;
+  if (c) { audioInit(); uiBlip(); startLevel(+c.getAttribute("data-i")); return; }
+  var a = e.target.closest ? e.target.closest("[data-a]") : null;
+  if (a) {
+    audioInit(); uiBlip();
+    var act = a.getAttribute("data-a");
+    if (act === "next") startLevel(Math.min(LEVELS.length - 1, G.lvl + 1));
+    else if (act === "replay") startLevel(G.lvl);
+    else if (act === "menu") showMenu();
+    return;
+  }
+  if (e.target && e.target.id === "resetBtn") {
+    if (confirm("Reset all progress?")) { var sd = prog.sound; prog = { u: 1, s: {}, sound: sd }; saveProg(); showMenu(); }
+  }
+});
+
+// ---------- 关卡流程 ----------
+function startLevel(i) {
+  var L = LEVELS[i];
+  G.lvl = i; G.rot = L.start;
+  G.tilt = i < 2 ? L.ref[1] : 1 - L.ref[1];
+  G.moves = 0; G.elapsed = 0; G.lastSec = -1;
+  G.parts = []; G.trail = []; G.lastPx = []; G.toast = null; G.shake = 0;
+  G.ready = false; G.prevLitN = 0; G.prevPol = false;
+  // 目标星字母（A、B、C…按目标对出现顺序）
+  G.letter = []; var next = 0;
+  for (var k = 0; k < L.pairs.length; k++) {
+    var a = L.pairs[k][0], b = L.pairs[k][1];
+    if (!G.letter[a]) G.letter[a] = String.fromCharCode(65 + next++);
+    if (!G.letter[b]) G.letter[b] = String.fromCharCode(65 + next++);
+  }
+  G.res = checkLevel(L, G.rot, G.tilt);
+  G.prevLit = G.res.lit.slice();
+  for (var q = 0; q < G.res.lit.length; q++) if (G.res.lit[q]) G.prevLitN++;
+  tiltBtn.textContent = "TILT " + (G.tilt ? "II" : "I");
+  G.scene = "PLAY"; hideOverlay(); bar.style.display = "flex"; fit(); updHUD();
+  cgPlayStart();
+  if (i === 0) G.toast = { text: "Drag to rotate - make each dashed pair meet", t: 4 };
+  else if (i === 3) G.toast = { text: "Crest-marked stars must stay in the moonlight (left half)", t: 4 };
+  else if (i === 4) G.toast = { text: "Dark stars pollute strands - rotate them away", t: 4 };
+  else if (i === 20) G.toast = { text: "The sky drifts now - time your WEAVE", t: 4 };
+}
+function doWeave() {
+  if (G.scene !== "PLAY") return;
+  var L = LEVELS[G.lvl], res = checkLevel(L, G.rot, G.tilt);
+  if (res.win) { winSequence(); return; }
+  var unlit = 0, k;
+  for (k = 0; k < res.lit.length; k++) if (!res.lit[k]) unlit++;
+  var anyPol = false;
+  for (k = 0; k < res.polluted.length; k++) if (res.polluted[k]) anyPol = true;
+  var msg;
+  if (unlit > 0) msg = unlit + " STRAND" + (unlit > 1 ? "S" : "") + " STILL FAINT";
+  else if (res.cross) msg = "STRANDS CROSS - REWEAVE";
+  else if (anyPol) msg = "A DARK STAR POLLUTES A STRAND";
+  else msg = "A MOONLIT STAR IS IN SHADOW";
+  G.toast = { text: msg, t: 2 }; G.shake = 1; bassHit();
+}
+function winSequence() {
+  G.scene = "WOVEN";
+  weaveBtn.classList.remove("pulse");
+  cgPlayStop(true); choir();
+  var L = LEVELS[G.lvl];
+  for (var k = 0; k < L.pairs.length; k++) burstAtPair(L, G.res, k, true);
+  setTimeout(function () {
+    if (G.scene !== "WOVEN") return;
+    var st = (G.moves <= L.par[0] && G.elapsed <= L.par[1]) ? 3 : (G.moves <= L.par[0] + 3 && G.elapsed <= L.par[1] * 1.6) ? 2 : 1;
+    prog.s[G.lvl] = Math.max(prog.s[G.lvl] || 0, st);
+    prog.u = Math.max(prog.u, Math.min(LEVELS.length, G.lvl + 2));
+    saveProg();
+    showWin(st);
+  }, 950);
+}
+
+// ---------- 粒子 ----------
+function burstAtPair(L, res, k, big) {
+  var a = res.pos[L.pairs[k][0]], b = res.pos[L.pairs[k][1]];
+  var ax = CX + R * a.u, ay = CY - R * a.v, bx = CX + R * b.u, by = CY - R * b.v;
+  var n = big ? 26 : 8;
+  for (var i = 0; i < n; i++) {
+    var f = Math.random(), x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+    var ang = Math.random() * 6.283, sp = 30 + Math.random() * (big ? 160 : 80);
+    G.parts.push({ x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 0.5 + Math.random() * 0.5, col: big ? "#ffe9a6" : "#ffd76a", sz: 1.5 + Math.random() * 2 });
+  }
+}
+
+// ---------- 渲染 ----------
+var STARCOLS = ["#dfe8ff", "#ffe7c2", "#cfd6ff", "#ffd9b0", "#e8f0ff", "#ffc9d8"];
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+function drawDust(t) {
+  for (var i = 0; i < DUST.length; i++) {
+    var d = DUST[i], a = 0.05 + 0.16 * (0.5 + 0.5 * Math.sin(t * d.sp + d.ph));
+    ctx.fillStyle = "rgba(190,210,255," + a.toFixed(3) + ")";
+    ctx.fillRect(d.x, d.y, 1.6, 1.6);
+  }
+}
+function drawMoon() {
+  // 月光幕帘（左半场受照）
+  var vg = ctx.createLinearGradient(0, 0, CX, 0);
+  vg.addColorStop(0, "rgba(150,180,255,0.10)"); vg.addColorStop(1, "rgba(150,180,255,0)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, CX, H);
+  ctx.strokeStyle = "rgba(150,180,255,0.16)"; ctx.setLineDash([3, 9]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(CX, 14); ctx.lineTo(CX, H - 14); ctx.stroke(); ctx.setLineDash([]);
+  // 月相（弦月）
+  var mx = 66, my = 104;
+  var mg = ctx.createRadialGradient(mx, my, 4, mx, my, 52);
+  mg.addColorStop(0, "rgba(200,220,255,0.30)"); mg.addColorStop(1, "rgba(200,220,255,0)");
+  ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx, my, 52, 0, 7); ctx.fill();
+  ctx.fillStyle = "#dfe9ff"; ctx.beginPath(); ctx.arc(mx, my, 14, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(8,10,26,0.94)"; ctx.beginPath(); ctx.arc(mx + 5.5, my - 4, 12.4, 0, 7); ctx.fill();
+}
+function drawRim(t) {
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 7);
+  if (G.ready && G.scene === "PLAY") {
+    ctx.strokeStyle = "rgba(255,215,106," + (0.35 + 0.25 * Math.sin(t * 5)).toFixed(3) + ")";
+    ctx.lineWidth = 2;
+  } else {
+    ctx.strokeStyle = "rgba(140,160,255,0.10)"; ctx.lineWidth = 1;
+  }
+  ctx.stroke();
+}
+function drawTrails(dt) {
+  var res = G.res; if (!res) return;
+  for (var i = 0; i < res.pos.length; i++) {
+    var p = res.pos[i], x = CX + R * p.u, y = CY - R * p.v;
+    var tr = G.trail[i] || (G.trail[i] = []);
+    var lp = G.lastPx[i];
+    if (!lp || Math.abs(lp[0] - x) + Math.abs(lp[1] - y) > 1.2) {
+      tr.push({ x: x, y: y, a: 0.5 });
+      if (tr.length > 10) tr.shift();
+    }
+    G.lastPx[i] = [x, y];
+    for (var j = 0; j < tr.length; j++) tr[j].a -= dt * 1.4;
+    while (tr.length && tr[0].a <= 0) tr.shift();
+    ctx.lineWidth = 1;
+    for (j = 1; j < tr.length; j++) {
+      ctx.strokeStyle = "rgba(160,190,255," + Math.max(0, tr[j].a * 0.5).toFixed(3) + ")";
+      ctx.beginPath(); ctx.moveTo(tr[j - 1].x, tr[j - 1].y); ctx.lineTo(tr[j].x, tr[j].y); ctx.stroke();
+    }
+  }
+}
+function drawStrands(res) {
+  ctx.lineWidth = 1; ctx.strokeStyle = "rgba(120,140,200,0.15)";
+  for (var k = 0; k < res.strands.length; k++) {
+    var a = res.pos[res.strands[k][0]], b = res.pos[res.strands[k][1]];
+    ctx.beginPath();
+    ctx.moveTo(CX + R * a.u, CY - R * a.v);
+    ctx.lineTo(CX + R * b.u, CY - R * b.v);
+    ctx.stroke();
+  }
+}
+function drawPairs(L, res, t) {
+  for (var k = 0; k < L.pairs.length; k++) {
+    var a = res.pos[L.pairs[k][0]], b = res.pos[L.pairs[k][1]];
+    var ax = CX + R * a.u, ay = CY - R * a.v, bx = CX + R * b.u, by = CY - R * b.v;
+    if (res.lit[k]) {
+      var pol = res.polluted[k];
+      ctx.strokeStyle = pol ? "rgba(255,90,90," + (0.65 + 0.3 * Math.sin(t * 18)).toFixed(3) + ")" : "rgba(255,215,106,0.92)";
+      ctx.lineWidth = pol ? 2 : 2.4;
+      ctx.shadowColor = pol ? "#ff5a5a" : "#ffd76a"; ctx.shadowBlur = 9;
+      ctx.setLineDash([12, 9]); ctx.lineDashOffset = -(t * 42) % 21;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineDashOffset = 0; ctx.shadowBlur = 0;
+      if (!pol) {                              // 流光点
+        var fr = (t * 0.45 + k * 0.37) % 1;
+        var sx = ax + (bx - ax) * fr, sy = ay + (by - ay) * fr;
+        ctx.fillStyle = "#fff"; ctx.shadowColor = "#ffd76a"; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.arc(sx, sy, 2.2, 0, 7); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    } else {                                   // 目标星对虚线预览
+      ctx.strokeStyle = "rgba(150,170,255,0.30)"; ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 8]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  if (res.cross && res.crossAt) {              // 交叉标记
+    var cx2 = CX + R * res.crossAt.u, cy2 = CY - R * res.crossAt.v;
+    ctx.strokeStyle = "rgba(255,90,90,0.95)"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx2 - 6, cy2 - 6); ctx.lineTo(cx2 + 6, cy2 + 6);
+    ctx.moveTo(cx2 + 6, cy2 - 6); ctx.lineTo(cx2 - 6, cy2 + 6);
+    ctx.stroke();
+  }
+}
+function drawStars(L, res, t) {
+  var order = [], i;
+  for (i = 0; i < res.pos.length; i++) order.push(i);
+  order.sort(function (a, b) { return res.pos[a].d - res.pos[b].d; });   // 先画背半球
+  for (var oi = 0; oi < order.length; oi++) {
+    i = order[oi];
+    var p = res.pos[i], dark = L.stars[i][2] === 1;
+    var sx = CX + R * p.u, sy = CY - R * p.v;
+    var fa = p.d > 0 ? 1 : 0.55, sc = p.d > 0 ? 1 : 0.8;
+    if (dark) {                                // 干扰星：红晕
+      var hr = 11 + 2.2 * Math.sin(t * 2.6 + i);
+      var hg = ctx.createRadialGradient(sx, sy, 1, sx, sy, hr);
+      hg.addColorStop(0, "rgba(255,70,70,0.34)"); hg.addColorStop(1, "rgba(255,70,70,0)");
+      ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(sx, sy, hr, 0, 7); ctx.fill();
+      ctx.fillStyle = "#1c0810"; ctx.beginPath(); ctx.arc(sx, sy, 3.4 * sc, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(255,90,90,0.85)"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(sx, sy, 4.8 * sc, 0, 7); ctx.stroke();
+      continue;
+    }
+    var tw = 0.72 + 0.28 * Math.sin(t * (1.1 + (i % 5) * 0.31) + i * 1.7);
+    var base = 3.1 + ((i * 37) % 10) * 0.16;
+    if (G.litStar[i]) base += 1.1;
+    base *= sc;
+    var col = STARCOLS[i % STARCOLS.length];
+    var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, base * 3.2);
+    g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = 0.5 * tw * fa;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, base * 3.2, 0, 7); ctx.fill();
+    ctx.globalAlpha = Math.min(1, 0.95 * tw * fa);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(sx, sy, base, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, base * 0.42), 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (G.letter[i]) {
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "600 10px Arial"; ctx.textAlign = "center";
+      ctx.fillText(G.letter[i], sx, sy + 15);
+    }
+  }
+}
+function drawBadges(L, res, t) {
+  var moon = L.moon || [];
+  for (var i = 0; i < moon.length; i++) {
+    var m = moon[i], p = res.pos[m];
+    var sx = CX + R * p.u, sy = CY - R * p.v, ok = p.u <= 0;
+    if (!ok) {                                 // 未受照：红圈警示
+      ctx.strokeStyle = "rgba(255,120,120," + (0.5 + 0.3 * Math.sin(t * 6)).toFixed(3) + ")";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(sx, sy, 8.5, 0, 7); ctx.stroke();
+    }
+    var bx = sx + 11, by = sy - 11;            // 弦月徽记
+    ctx.fillStyle = ok ? "#cfe3ff" : "#ff8a8a";
+    ctx.beginPath(); ctx.arc(bx, by, 4.2, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(8,10,26,0.9)";
+    ctx.beginPath(); ctx.arc(bx + 1.7, by - 1.2, 3.6, 0, 7); ctx.fill();
+  }
+}
+function drawTopText(L) {
+  ctx.fillStyle = "rgba(220,228,255,0.85)"; ctx.font = "600 13px Arial"; ctx.textAlign = "center";
+  ctx.fillText(L.name.toUpperCase(), CX, 26);
+  if (L.drift) { ctx.fillStyle = "rgba(255,190,90,0.8)"; ctx.font = "700 10px Arial"; ctx.fillText("DRIFTING SKY", CX, 41); }
+}
+function drawToast(dt) {
+  if (!G.toast) return;
+  G.toast.t -= dt;
+  if (G.toast.t <= 0) { G.toast = null; return; }
+  ctx.globalAlpha = Math.min(1, G.toast.t / 0.4);
+  ctx.font = "700 12px Arial";
+  var w = ctx.measureText(G.toast.text).width + 30;
+  roundRect(ctx, CX - w / 2, 62, w, 30, 10);
+  ctx.fillStyle = "rgba(16,10,14,0.9)"; ctx.fill();
+  ctx.strokeStyle = "rgba(255,100,100,0.8)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = "#ffd9d9"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(G.toast.text, CX, 78);
+  ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
+}
+function drawParticles(dt) {
+  for (var i = G.parts.length - 1; i >= 0; i--) {
+    var p = G.parts[i];
+    p.life -= dt;
+    if (p.life <= 0) { G.parts.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.98; p.vy *= 0.98;
+    ctx.globalAlpha = Math.min(1, p.life * 1.6);
+    ctx.fillStyle = p.col;
+    ctx.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+  }
+  ctx.globalAlpha = 1;
+}
+function render(t, dt) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (G.shake > 0) {
+    G.shake = Math.max(0, G.shake - dt * 1.8);
+    ctx.translate((Math.random() - 0.5) * 9 * G.shake, (Math.random() - 0.5) * 9 * G.shake);
+  }
+  ctx.drawImage(bgC, 0, 0, W, H);
+  drawDust(t);
+  if (G.scene === "MENU") { drawMoon(); return; }
+  var L = LEVELS[G.lvl], res = G.res;
+  if (!res) return;
+  drawMoon(); drawRim(t);
+  drawTrails(dt);
+  drawStrands(res);
+  drawPairs(L, res, t);
+  // 点亮标记（供画星增亮）
+  G.litStar = [];
+  for (var k = 0; k < L.pairs.length; k++) {
+    if (res.lit[k]) { G.litStar[L.pairs[k][0]] = true; G.litStar[L.pairs[k][1]] = true; }
+  }
+  drawStars(L, res, t);
+  drawBadges(L, res, t);
+  drawParticles(dt);
+  drawTopText(L);
+  drawToast(dt);
+}
+
+// ---------- 主循环 ----------
+var last = 0;
+function frame(ts) {
+  var t = ts / 1000;
+  var dt = Math.min(t - last, 0.05);
+  if (!(dt > 0)) dt = 0.016;
+  last = t;
+  if (G.scene === "PLAY") {
+    var L = LEVELS[G.lvl];
+    G.elapsed += dt;
+    if (L.drift) {                            // 时间挑战：天球自动漂移
+      G.rot += L.drift * dt * (G.lvl % 2 ? -1 : 1);
+      G.rot = ((G.rot % 360) + 360) % 360;
+    }
+    G.res = checkLevel(L, G.rot, G.tilt);
+    var litN = 0, k, anyPol = false;
+    for (k = 0; k < G.res.lit.length; k++) if (G.res.lit[k]) litN++;
+    for (k = 0; k < G.res.polluted.length; k++) if (G.res.polluted[k]) anyPol = true;
+    if (litN > G.prevLitN) {                  // 新连线 → 竖琴音阶
+      harp(litN - 1);
+      for (k = 0; k < L.pairs.length; k++) if (G.res.lit[k] && !G.prevLit[k]) burstAtPair(L, G.res, k, false);
+    } else if (litN < G.prevLitN) {
+      tone(247, 0.07, "sine", 0.025);
+    }
+    G.prevLitN = litN; G.prevLit = G.res.lit.slice();
+    if (anyPol && !G.prevPol && t - G.lastPolSnd > 0.4) { tone(130, 0.22, "sawtooth", 0.07); G.lastPolSnd = t; }
+    G.prevPol = anyPol;
+    if (G.res.win && !G.ready) readyChime();
+    G.ready = G.res.win;
+    weaveBtn.classList.toggle("pulse", G.ready);
+    updHUD();
+    // 旋转呼呼声音量
+    if (whooshG) {
+      var target = drag.on ? Math.min(0.12, Math.abs(drag.vel) * 0.004) : (L.drift ? 0.006 : 0);
+      whooshG.gain.value += (target - whooshG.gain.value) * Math.min(1, dt * 10);
+      whooshF.frequency.value = 420 + Math.min(500, Math.abs(drag.vel));
+    }
+  } else if (G.scene === "MENU") {
+    G.rot = (G.rot + dt * 4) % 360;
+  }
+  render(t, dt);
+  requestAnimationFrame(frame);
+}
+
+// ---------- 输入（拖拽旋转：鼠标 + 触控） ----------
+var drag = { on: false, x: 0, total: 0, vel: 0 };
+function dragStart(x) {
+  if (G.scene !== "PLAY") return;
+  drag.on = true; drag.x = x; drag.total = 0; drag.vel = 0;
+}
+function dragMove(x) {
+  if (!drag.on || G.scene !== "PLAY") return;
+  var rect = canvas.getBoundingClientRect();
+  var dxL = (x - drag.x) * (W / rect.width);
+  drag.x = x; drag.total += Math.abs(dxL);
+  G.rot += dxL * SENS;
+  G.rot = ((G.rot % 360) + 360) % 360;
+  drag.vel = dxL * SENS * 60;
+}
+function dragEnd() {
+  if (!drag.on) return;
+  drag.on = false;
+  if (drag.total > 5) { G.moves++; updHUD(); }   // 拖拽一次算 1 个旋转操作
+  drag.vel = 0;
+}
+canvas.addEventListener("mousedown", function (e) { audioInit(); dragStart(e.clientX); });
+window.addEventListener("mousemove", function (e) { dragMove(e.clientX); });
+window.addEventListener("mouseup", dragEnd);
+canvas.addEventListener("touchstart", function (e) { e.preventDefault(); audioInit(); dragStart(e.touches[0].clientX); }, { passive: false });
+canvas.addEventListener("touchmove", function (e) { e.preventDefault(); if (e.touches.length) dragMove(e.touches[0].clientX); }, { passive: false });
+canvas.addEventListener("touchend", function (e) { e.preventDefault(); dragEnd(); }, { passive: false });
+canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+function toggleTilt() {
+  if (G.scene !== "PLAY") return;
+  G.tilt = 1 - G.tilt;
+  tiltBtn.textContent = "TILT " + (G.tilt ? "II" : "I");
+  uiBlip();
+}
+tiltBtn.addEventListener("click", function () { audioInit(); toggleTilt(); });
+weaveBtn.addEventListener("click", function () { audioInit(); doWeave(); });
+menuBtn.addEventListener("click", function () { audioInit(); uiBlip(); if (G.scene === "PLAY" || G.scene === "WOVEN") cgPlayStop(false); showMenu(); });
+sndBtn.addEventListener("click", function () {
+  audioInit();
+  prog.sound = prog.sound ? 0 : 1;
+  if (master) master.gain.value = prog.sound;
+  sndBtn.innerHTML = "&#9834; " + (prog.sound ? "ON" : "OFF");
+  saveProg();
+  if (prog.sound) uiBlip();
+});
+document.addEventListener("keydown", function (e) {
+  audioInit();
+  if (G.scene !== "PLAY") return;
+  if (e.key === "ArrowLeft") { G.rot = (G.rot - 4 + 360) % 360; G.moves++; updHUD(); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { G.rot = (G.rot + 4) % 360; G.moves++; updHUD(); e.preventDefault(); }
+  else if (e.key === "t" || e.key === "T") toggleTilt();
+  else if (e.key === "Enter" || e.key === " " || e.key === "w" || e.key === "W") { e.preventDefault(); doWeave(); }
+  else if (e.key === "Escape") { cgPlayStop(false); showMenu(); }
+});
+window.addEventListener("pointerdown", audioInit);
+
+// ---------- 启动 ----------
+buildBG();
+loadProg();
+if (master) master.gain.value = prog.sound;
+sndBtn.innerHTML = "&#9834; " + (prog.sound ? "ON" : "OFF");
+fit();
+showMenu();
+requestAnimationFrame(frame);
+// 调试/测试钩子（不影响游戏逻辑）
+window.__cw = { G: G, checkLevel: checkLevel, LEVELS: LEVELS, TILTS: TILTS, THRESH: THRESH };
+</script>
+</body>
+</html>
